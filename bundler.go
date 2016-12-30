@@ -31,9 +31,10 @@ type CtxCredentials struct{}
 // Each function should write to the ResponseWriter.
 // No further writing to the ResponseWriter should occur.
 type ErrorWriter interface {
-	Unauthorized(w http.ResponseWriter, err error)
-	ServerError(w http.ResponseWriter, err error)
-	Forbidden(w http.ResponseWriter, err error)
+	Unauthorized(w http.ResponseWriter, r *http.Request, err error)
+	ServerError(w http.ResponseWriter, r *http.Request, err error)
+	Forbidden(w http.ResponseWriter, r *http.Request, err error)
+	BadRequest(w http.ResponseWriter, r *http.Request, err error)
 }
 
 // Roler is in interface used during authorization to
@@ -42,7 +43,7 @@ type Roler interface {
 	HasRole(role string) bool
 }
 
-// Bundler bundles authentication, authorization, validation and per handler logic into a nice package.
+// Bundler bundles authentication, authorization, validation and per HandlerFunc logic into a nice package.
 type Bundler struct {
 	schemes       map[string]Scheme
 	defaultScheme string
@@ -63,27 +64,28 @@ func (b *Bundler) RegisterScheme(name string, scheme Scheme) {
 	b.schemes[name] = scheme
 }
 
-// SetDefaultScheme sets the scheme name that will be used for every bundled handler.
+// SetDefaultScheme sets the scheme name that will be used for every bundled HandlerFunc.
 // Error will be returned if the scheme has not been registered.
 func (b *Bundler) SetDefaultScheme(name string) error {
 	if _, ok := b.schemes[name]; !ok {
 		return errors.New("scheme not registered")
 	}
 	b.defaultScheme = name
+	return nil
 }
 
 // O are options to pass to Bundle.
 type O struct {
-	Allow    []string     // Content-Types to allow.
-	Roles    []string     // Roles to allow, object in request context with key CtxCredentials must implement Roler.
-	Schemes  []string     // A series of authentication schemes to try in order. Must be a key in Bundler.SchemeMap.
-	AuthMode string       // 'try', 'required', 'none'.
-	Before   []HandleWrap // A series of handlerfuncs to execute before Handle.
-	After    []HandleWrap // A serios of hanlerfuncs to execute after Handle.
-	Handler  func(http.ResponseWriter, *http.Request)
+	Allow       []string     // Content-Types to allow.
+	Roles       []string     // Roles to allow, object in request context with key CtxCredentials must implement Roler.
+	Schemes     []string     // A series of authentication schemes to try in order. Must be a key in Bundler.SchemeMap.
+	AuthMode    string       // 'try', 'required', 'none'.
+	Before      []HandleWrap // A series of HandlerFuncs to execute before Handle.
+	After       []HandleWrap // A serios of HandlerFuncs to execute after Handle.
+	HandlerFunc func(http.ResponseWriter, *http.Request)
 }
 
-// HandleWrap is a function that takes a handler func and returns a handler func.
+// HandleWrap is a function that takes a HandlerFunc and returns a HandlerFunc.
 type HandleWrap func(func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request)
 
 // WrapSlice takes a variable amount of HandleWraps and returns a slice.
@@ -111,16 +113,22 @@ func (b *Bundler) New(options O) func(http.ResponseWriter, *http.Request) {
 			panic(fmt.Sprintf("invalid scheme in RO.Schemes: %s", k))
 		}
 	}
+	// Load the default scheme.
+	if len(options.Schemes) < 1 && b.defaultScheme != "" {
+		options.Schemes = append(options.Schemes, b.defaultScheme)
+	}
+
 	bindle := bundle{bundler: b, opts: options}
 
-	// Prepend auth handler chain.
+	// Prepend auth HandlerFunc chain.
 	bindle.chain = append(bindle.chain, bindle.authenticate)
 	bindle.chain = append(bindle.chain, bindle.authorize)
+	bindle.chain = append(bindle.chain, bindle.allow)
 	bindle.chain = append(bindle.chain, bindle.opts.Before...)
 
 	// Turtles all the way down...
 	for i := (len(bindle.chain) - 1); i >= 0; i-- {
-		bindle.opts.Handler = bindle.chain[i](bindle.opts.Handler)
+		bindle.opts.HandlerFunc = bindle.chain[i](bindle.opts.HandlerFunc)
 	}
 	var after func(http.ResponseWriter, *http.Request)
 	for i := (len(bindle.opts.After) - 1); i >= 0; i-- {
@@ -128,7 +136,7 @@ func (b *Bundler) New(options O) func(http.ResponseWriter, *http.Request) {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		bindle.opts.Handler(w, r)
+		bindle.opts.HandlerFunc(w, r)
 		after(w, r)
 	}
 }
@@ -151,7 +159,7 @@ func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) fun
 		for i, k := range b.opts.Schemes {
 			scheme, ok := b.bundler.schemes[k]
 			if !ok {
-				b.bundler.ew.ServerError(w, errors.New("authentication scheme not registered"))
+				b.bundler.ew.ServerError(w, r, errors.New("authentication scheme not registered"))
 				return
 			}
 			user, err := scheme.Authenticate(w, r)
@@ -159,7 +167,7 @@ func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) fun
 				if b.opts.AuthMode == AUTHMODEREQUIRED {
 					// Last in the chain.
 					if i == len(b.opts.Schemes)-1 {
-						b.bundler.ew.Unauthorized(w, err)
+						b.bundler.ew.Unauthorized(w, r, err)
 						return
 					}
 				}
@@ -175,14 +183,13 @@ func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) fun
 // authorize ensures the user from CtxCredentials has a valid role for the bundle.
 func (b *bundle) authorize(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Authorize\n")
 		if len(b.opts.Roles) < 1 {
 			next(w, r)
 			return
 		}
 		roler, ok := r.Context().Value(CtxCredentials{}).(Roler)
 		if !ok {
-			b.bundler.ew.ServerError(w, errors.New("CtxCredentials does not implement Roler"))
+			b.bundler.ew.ServerError(w, r, errors.New("CtxCredentials does not implement Roler"))
 			return
 		}
 		var isAllowed bool
@@ -193,8 +200,29 @@ func (b *bundle) authorize(next func(http.ResponseWriter, *http.Request)) func(h
 			}
 		}
 		if !isAllowed {
-			b.bundler.ew.Forbidden(w, fmt.Errorf("missing required roles: %s", strings.Join(b.opts.Roles, " ")))
+			b.bundler.ew.Forbidden(w, r, fmt.Errorf("missing required roles: %s", strings.Join(b.opts.Roles, " ")))
 			return
+		}
+		next(w, r)
+	}
+}
+
+// allow checks the content-type header of a request and ensures that it is allowed.
+func (b *bundle) allow(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "DELETE" {
+			contentType := r.Header.Get("Conntent-Type")
+			var found bool
+			for _, allowed := range b.opts.Allow {
+				if strings.Contains(contentType, allowed) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				b.bundler.ew.BadRequest(w, r, fmt.Errorf("invalid request content-type: %s", contentType))
+				return
+			}
 		}
 		next(w, r)
 	}
