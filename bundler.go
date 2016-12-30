@@ -220,6 +220,10 @@ func (b *bundle) authorize(next func(http.ResponseWriter, *http.Request)) func(h
 // allow checks the content-type header of a request and ensures that it is allowed.
 func (b *bundle) allow(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(b.opts.Allow) < 1 {
+			next(w, r)
+			return
+		}
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "DELETE" {
 			contentType := r.Header.Get("Conntent-Type")
 			var found bool
