@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -108,6 +107,9 @@ func (b *Bundler) New(options O) func(http.ResponseWriter, *http.Request) {
 	if options.AuthMode != AUTHMODEREQUIRED && len(options.Roles) != 0 {
 		panic(fmt.Sprintf("invalid authentication mode %s for amount of roles %d", options.AuthMode, len(options.Roles)))
 	}
+	if options.HandlerFunc == nil {
+		panic(fmt.Sprintf("HandlerFunc not not be nil"))
+	}
 	for _, k := range options.Schemes {
 		if _, ok := b.schemes[k]; !ok {
 			panic(fmt.Sprintf("invalid scheme in RO.Schemes: %s", k))
@@ -130,14 +132,23 @@ func (b *Bundler) New(options O) func(http.ResponseWriter, *http.Request) {
 	for i := (len(bindle.chain) - 1); i >= 0; i-- {
 		bindle.opts.HandlerFunc = bindle.chain[i](bindle.opts.HandlerFunc)
 	}
+
 	var after func(http.ResponseWriter, *http.Request)
+	if len(bindle.opts.After) > 0 {
+		// A function that does nothing calls to next in After handlers don't panic.
+		after = func(w http.ResponseWriter, r *http.Request) {
+			return
+		}
+	}
 	for i := (len(bindle.opts.After) - 1); i >= 0; i-- {
 		after = bindle.opts.After[i](after)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		bindle.opts.HandlerFunc(w, r)
-		after(w, r)
+		if after != nil {
+			after(w, r)
+		}
 	}
 }
 
@@ -150,7 +161,6 @@ type bundle struct {
 // authenticate attempts to authenticate a request for the configured schemes.
 func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Authentiate\n")
 		if b.opts.AuthMode == AUTHMODENONE {
 			next(w, r)
 			return
