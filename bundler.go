@@ -225,7 +225,7 @@ func (b *bundle) allow(next func(http.ResponseWriter, *http.Request)) func(http.
 			return
 		}
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "DELETE" {
-			contentType := r.Header.Get("Conntent-Type")
+			contentType := r.Header.Get("Content-Type")
 			var found bool
 			for _, allowed := range b.opts.Allow {
 				if strings.Contains(contentType, allowed) {
