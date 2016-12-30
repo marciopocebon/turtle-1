@@ -77,7 +77,7 @@ func (b *Bundler) SetDefaultScheme(name string) error {
 type O struct {
 	Allow       []string     // Content-Types to allow.
 	Roles       []string     // Roles to allow, object in request context with key CtxCredentials must implement Roler.
-	Schemes     []string     // A series of authentication schemes to try in order. Must be a key in Bundler.SchemeMap.
+	Schemes     []string     // A series of authentication schemes to try in order. Must be registered with Bundler.
 	AuthMode    string       // 'try', 'required', 'none'.
 	Before      []HandleWrap // A series of HandlerFuncs to execute before Handle.
 	After       []HandleWrap // A serios of HandlerFuncs to execute after Handle.
