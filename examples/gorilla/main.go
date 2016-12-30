@@ -7,10 +7,9 @@ import (
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
 	"github.com/tomsteele/turtle"
 	"github.com/tomsteele/turtle/schemes"
-	"goji.io"
-	"goji.io/pat"
 )
 
 type EW struct{}
@@ -68,9 +67,8 @@ func main() {
 		},
 	})
 	bundle.SetDefaultScheme("jwt") // Every request will require jwt scheme, unless AuthMode none.
-	mux := goji.NewMux()
-
-	mux.HandleFunc(pat.Post("/token"), bundle.New(turtle.O{
+	router := mux.NewRouter()
+	router.HandleFunc("/token", bundle.New(turtle.O{
 		Allow:    []string{"application/json"}, // Only allow JSON.After
 		AuthMode: "none",                       // Disable authentication for this route.
 		HandlerFunc: func(w http.ResponseWriter, r *http.Request) {
@@ -82,9 +80,8 @@ func main() {
 			s, _ := token.SignedString([]byte("password"))
 			fmt.Fprintf(w, "token: %s", s)
 		},
-	}))
-
-	mux.HandleFunc(pat.Get("/me"), bundle.New(turtle.O{
+	})).Methods("POST")
+	router.HandleFunc("/me", bundle.New(turtle.O{
 		AuthMode: "required",
 		Roles:    []string{"user"}, // Roles can be used to restrict access.
 		Schemes:  []string{"jwt"},  // Schemes can be set per HandleFunc.
@@ -93,7 +90,7 @@ func main() {
 			u := r.Context().Value(turtle.CtxCredentials{}).(User)
 			fmt.Fprintf(w, "username: %s", u.Username)
 		},
-	}))
+	})).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(":3000", mux))
+	log.Fatal(http.ListenAndServe(":3000", router))
 }

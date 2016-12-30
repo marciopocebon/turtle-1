@@ -3,7 +3,7 @@ HandlerFunc all the way down.
 
 
 ### Example
-The following uses Goji, but anything taking a `HandlerFunc` will work with `turtle.Bundle`. 
+The following uses Goji, but anything taking a `HandlerFunc` will work with `turtle.Bundle`. See examples folder for more "frameworks", such as Gorilla. 
 ```go
 package main
 
