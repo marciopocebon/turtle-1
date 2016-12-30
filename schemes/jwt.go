@@ -1,4 +1,4 @@
-package turtle
+package schemes
 
 import (
 	"errors"
