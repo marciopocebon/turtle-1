@@ -1,10 +1,3 @@
-# turtle
-HandlerFunc all the way down.
-
-
-### Example
-The following uses Goji, but anything taking a `HandlerFunc` will work with `turtle.Bundle`. 
-```go
 package main
 
 import (
@@ -104,26 +97,3 @@ func main() {
 
 	log.Fatal(http.ListenAndServe(":3000", mux))
 }
-```
-
-`/token` requires JSON.
-```
-$ curl http://localhost:3000/token -X POST -H "Content-Type: application/json"
-token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFsaWNlIn0.DIUMnDYOs1tti1aAEHXBdmdzqqrWYWGYSVWy4Q63RxeiCSLAXaJPXHWDQ-fi8tsuv1TdhIar3J14PtG5b8TKOw
-```
-Or `ErrorWriter.BadRequest` is called.
-```
-$ curl  http://localhost:3000/token -X POST -H "Content-Type: text/plain"
-bad request
-```
-Authentication on all handlers will be required using the default scheme. And all routes require an `AuthMode`.
-```
-$ curl http://localhost:3000/me -H 'Authorization: bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFsaWNlIn0.DIUMnDYOs1tti1aAEHXBdmdzqqrWYWGYSVWy4Q63RxeiCS
-LAXaJPXHWDQ-fi8tsuv1TdhIar3J14PtG5b8TKOw'
-username: alice
-```
-If authentication or validation fails, `ErrorWriter.Unauthorized` is called.
-```
-$ curl http://localhost:3000/me -H 'Authorization: bearer x'
-unauthorized
-```
