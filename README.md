@@ -1,4 +1,6 @@
 # turtle
+[![](https://godoc.org/github.com/tomsteele/turtle?status.svg)](http://godoc.org/github.com/tomsteele/turtle)
+
 HandlerFunc all the way down.
 
 
