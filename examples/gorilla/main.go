@@ -12,24 +12,6 @@ import (
 	"github.com/tomsteele/turtle/schemes"
 )
 
-type EW struct{}
-
-func (e EW) Unauthorized(w http.ResponseWriter, r *http.Request, err error) {
-	fmt.Fprintf(w, "unauthorized")
-}
-
-func (e EW) ServerError(w http.ResponseWriter, r *http.Request, err error) {
-	fmt.Fprintf(w, "serverError")
-}
-
-func (e EW) Forbidden(w http.ResponseWriter, r *http.Request, err error) {
-	fmt.Fprintf(w, "forbidden")
-}
-
-func (e EW) BadRequest(w http.ResponseWriter, r *http.Request, err error) {
-	fmt.Fprintf(w, "bad request")
-}
-
 type User struct {
 	Username string
 	Roles    []string
@@ -52,7 +34,7 @@ var user = User{
 
 func main() {
 
-	bundle := turtle.NewBundler(EW{})
+	bundle := turtle.NewBundler()
 	bundle.RegisterScheme("jwt", &schemes.JWTScheme{
 		Secret: []byte("password"),
 		ValidateFunc: func(claims jwt.MapClaims) (interface{}, error) {
