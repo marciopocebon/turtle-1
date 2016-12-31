@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/stacktitan/boom"
+	"github.com/unrolled/render"
 )
 
 // AuthMode constants.
@@ -26,14 +29,26 @@ func isValidAuthMode(mode string) bool {
 // holding credentials returned from Scheme.Authenticate.
 type CtxCredentials struct{}
 
-// ErrorWriter implements error handling for bundled routes.
-// Each function should write to the ResponseWriter.
-// No further writing to the ResponseWriter should occur.
+// ErrorWriter implements error handling for bundles HandlerFunc.
+// err is a boom.Error and has information such as status codes.
+// Seee DefaultErrorWriter for implementation details.
 type ErrorWriter interface {
-	Unauthorized(w http.ResponseWriter, r *http.Request, err error)
-	ServerError(w http.ResponseWriter, r *http.Request, err error)
-	Forbidden(w http.ResponseWriter, r *http.Request, err error)
-	BadRequest(w http.ResponseWriter, r *http.Request, err error)
+	WriteError(w http.ResponseWriter, r *http.Request, err error)
+}
+
+// DefaultErrorWriter is the default ErrorWriter used by Bundler.
+type DefaultErrorWriter struct {
+	r *render.Render
+}
+
+// WriteError writes an error to the ResponseWriter as JSON.
+func (d DefaultErrorWriter) WriteError(w http.ResponseWriter, _ *http.Request, err error) {
+	boomError, ok := err.(boom.Error)
+	if !ok {
+		d.r.JSON(w, 500, boom.BadImplementation(err)) // Should never happen.
+		return
+	}
+	d.r.JSON(w, boomError.StatusCode, boomError)
 }
 
 // Roler is in interface used during authorization to
@@ -46,14 +61,14 @@ type Roler interface {
 type Bundler struct {
 	schemes       map[string]Scheme
 	defaultScheme string
-	ew            ErrorWriter
+	EW            ErrorWriter
 }
 
 // NewBundler returns a new Bundler.
-func NewBundler(ew ErrorWriter) *Bundler {
+func NewBundler() *Bundler {
 	return &Bundler{
 		schemes: make(map[string]Scheme),
-		ew:      ew,
+		EW:      DefaultErrorWriter{r: render.New()},
 	}
 }
 
@@ -169,7 +184,7 @@ func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) fun
 		for i, k := range b.opts.Schemes {
 			scheme, ok := b.bundler.schemes[k]
 			if !ok {
-				b.bundler.ew.ServerError(w, r, errors.New("authentication scheme not registered"))
+				b.bundler.EW.WriteError(w, r, boom.BadImplementation(errors.New("authentication scheme not registered")))
 				return
 			}
 			user, err := scheme.Authenticate(w, r)
@@ -177,7 +192,7 @@ func (b *bundle) authenticate(next func(http.ResponseWriter, *http.Request)) fun
 				if b.opts.AuthMode == AUTHMODEREQUIRED {
 					// Last in the chain.
 					if i == len(b.opts.Schemes)-1 {
-						b.bundler.ew.Unauthorized(w, r, err)
+						b.bundler.EW.WriteError(w, r, boom.Unauthorized(""))
 						return
 					}
 				}
@@ -199,7 +214,7 @@ func (b *bundle) authorize(next func(http.ResponseWriter, *http.Request)) func(h
 		}
 		roler, ok := r.Context().Value(CtxCredentials{}).(Roler)
 		if !ok {
-			b.bundler.ew.ServerError(w, r, errors.New("CtxCredentials does not implement Roler"))
+			b.bundler.EW.WriteError(w, r, boom.BadImplementation(errors.New("CtxCredentials does not implement Roler")))
 			return
 		}
 		var isAllowed bool
@@ -210,7 +225,7 @@ func (b *bundle) authorize(next func(http.ResponseWriter, *http.Request)) func(h
 			}
 		}
 		if !isAllowed {
-			b.bundler.ew.Forbidden(w, r, fmt.Errorf("missing required roles: %s", strings.Join(b.opts.Roles, " ")))
+			b.bundler.EW.WriteError(w, r, boom.Forbidden(fmt.Sprintf("missing required roles: %s", strings.Join(b.opts.Roles, " "))))
 			return
 		}
 		next(w, r)
@@ -234,7 +249,7 @@ func (b *bundle) allow(next func(http.ResponseWriter, *http.Request)) func(http.
 				}
 			}
 			if !found {
-				b.bundler.ew.BadRequest(w, r, fmt.Errorf("invalid request content-type: %s", contentType))
+				b.bundler.EW.WriteError(w, r, boom.BadRequest(fmt.Sprintf("invalid request content-type: %s", contentType), nil))
 				return
 			}
 		}
