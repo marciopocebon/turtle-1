@@ -8,8 +8,8 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/tomsteele/turtle"
-	"github.com/tomsteele/turtle/schemes"
+	"github.com/stacktitan/turtle"
+	"github.com/stacktitan/turtle/schemes"
 )
 
 type User struct {

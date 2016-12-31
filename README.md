@@ -1,5 +1,5 @@
 # turtle
-[![](https://godoc.org/github.com/tomsteele/turtle?status.svg)](http://godoc.org/github.com/tomsteele/turtle)
+[![](https://godoc.org/github.com/stacktitan/turtle?status.svg)](http://godoc.org/github.com/stacktitan/turtle)
 
 HandlerFunc all the way down.
 
@@ -17,8 +17,8 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/tomsteele/turtle"
-	"github.com/tomsteele/turtle/schemes"
+	"github.com/stacktitan/turtle"
+	"github.com/stacktitan/turtle/schemes"
 )
 
 type User struct {
