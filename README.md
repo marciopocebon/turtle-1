@@ -5,7 +5,7 @@ HandlerFunc all the way down.
 
 
 ### Example
-The following uses gorilla router, but anything taking a `HandlerFunc` will work with `turtle.Bundle`. 
+The following uses gorilla router, but anything taking a `HandlerFunc` will work with `turtle.Bundle`.
 ```go
 package main
 
@@ -60,7 +60,7 @@ func main() {
 	bundle.SetDefaultScheme("jwt") // Every request will require jwt scheme, unless AuthMode none.
 	router := mux.NewRouter()
 	router.HandleFunc("/token", bundle.New(turtle.O{
-		Allow:    []string{"application/json"}, // Only allow JSON.After
+		Allow:    []string{"application/json"}, // Only allow JSON.
 		AuthMode: "none",                       // Disable authentication for this route.
 		HandlerFunc: func(w http.ResponseWriter, r *http.Request) {
 			// Here is where you would probably decode username and password and validate.
